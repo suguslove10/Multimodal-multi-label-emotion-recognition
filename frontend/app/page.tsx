@@ -19,6 +19,7 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [cameraLoading, setCameraLoading] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -34,9 +35,11 @@ export default function Home() {
 
   const startCamera = async () => {
     setError('');
+    setCameraLoading(true);
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'user' },
+        video: true,
         audio: false
       });
       
@@ -44,11 +47,17 @@ export default function Home() {
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        setIsCameraOn(true);
+        
+        // Simple approach - just set state after a short delay
+        setTimeout(() => {
+          setCameraLoading(false);
+          setIsCameraOn(true);
+        }, 500);
       }
     } catch (err: any) {
       console.error('Camera error:', err);
       setError('Camera access denied. Please allow camera permissions.');
+      setCameraLoading(false);
     }
   };
 
@@ -249,7 +258,7 @@ export default function Home() {
                   📸 Facial Expression
                 </label>
                 
-                {!isCameraOn && !imagePreview && (
+                {!isCameraOn && !imagePreview && !cameraLoading && (
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -272,6 +281,14 @@ export default function Home() {
                   </div>
                 )}
                 
+                {cameraLoading && (
+                  <div className="bg-gray-900 rounded-lg p-8 text-center">
+                    <Camera className="w-12 h-12 mx-auto mb-3 text-white animate-pulse" />
+                    <p className="text-white font-semibold">Starting camera...</p>
+                    <p className="text-gray-400 text-sm mt-1">Please allow camera access</p>
+                  </div>
+                )}
+                
                 {isCameraOn && (
                   <div className="space-y-2">
                     <div className="relative bg-black rounded-lg overflow-hidden">
@@ -280,7 +297,7 @@ export default function Home() {
                         autoPlay
                         playsInline
                         muted
-                        className="w-full h-auto max-h-64 object-contain mx-auto"
+                        className="w-full h-auto"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -290,7 +307,7 @@ export default function Home() {
                         className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-bold text-sm flex items-center justify-center gap-2"
                       >
                         <Check className="w-4 h-4" />
-                        Capture
+                        Capture Photo
                       </button>
                       <button
                         type="button"

@@ -97,9 +97,23 @@ export default function Home() {
   const startRecording = async () => {
     setError('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Request high-quality audio
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 48000,
+          channelCount: 1
+        }
+      });
       
-      const mediaRecorder = new MediaRecorder(stream);
+      // Try to use higher quality codec
+      let options = { mimeType: 'audio/webm;codecs=opus' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'audio/webm' };
+      }
+      
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -373,6 +387,11 @@ export default function Home() {
                     <>Start Recording</>
                   )}
                 </button>
+                {!audio && !isRecording && (
+                  <p className="text-xs text-gray-600 mt-2">
+                    💡 Tip: Speak expressively for 5-10 seconds for best results
+                  </p>
+                )}
               </div>
 
               {/* Submit Button */}

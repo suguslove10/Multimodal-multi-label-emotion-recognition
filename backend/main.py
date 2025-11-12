@@ -69,11 +69,38 @@ def analyze_image(img: Image.Image):
 
 def analyze_audio(audio_path: str):
     try:
-        res = audio_pipe(audio_path)
+        import librosa
+        import soundfile as sf
+        
+        # Load and resample audio to 16kHz (required by wav2vec2)
+        audio, sr = librosa.load(audio_path, sr=16000, mono=True)
+        
+        # Save as temporary WAV file
+        temp_wav = audio_path.replace('.webm', '_converted.wav')
+        sf.write(temp_wav, audio, 16000)
+        
+        # Analyze with the model
+        res = audio_pipe(temp_wav)
+        
+        # Clean up temp file
+        if os.path.exists(temp_wav):
+            os.remove(temp_wav)
+        
         if isinstance(res, list) and len(res) > 0:
-            return str(res[0]["label"]).title(), float(res[0]["score"])
+            # Get top result
+            top_result = res[0]
+            label = str(top_result["label"]).title()
+            score = float(top_result["score"])
+            
+            # If confidence is too low, check second best
+            if score < 0.3 and len(res) > 1:
+                label = str(res[1]["label"]).title()
+                score = float(res[1]["score"])
+            
+            return label, score
         return "Neutral", 0.0
-    except:
+    except Exception as e:
+        print(f"Audio analysis error: {e}")
         return "Neutral", 0.0
 
 def train_models():

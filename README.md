@@ -2,16 +2,16 @@
 
 Modern full-stack emotion recognition application using Next.js, FastAPI, and state-of-the-art AI models.
 
-![Tech Stack](https://img.shields.io/badge/Next.js-14-black)
+![Tech Stack](https://img.shields.io/badge/Next.js-16-black)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104-green)
 ![Python](https://img.shields.io/badge/Python-3.10--3.13-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
 
 ## ✨ Features
 
-- 🎨 **Modern UI** - Beautiful gradient design with Tailwind CSS
+- 🎨 **Modern UI** - Beautiful gradient design with Tailwind CSS v4
 - 📝 **Text Analysis** - Emotion detection from written text
-- 📸 **Facial Recognition** - Real-time webcam capture and facial emotion analysis
+- 📸 **Image Upload** - Facial emotion analysis from photos
 - 🎤 **Voice Analysis** - Audio recording and voice tone emotion detection
 - 🤖 **Machine Learning** - Decision Tree and KNN predictions
 - 📊 **Visualizations** - Interactive confidence charts
@@ -23,7 +23,7 @@ Modern full-stack emotion recognition application using Next.js, FastAPI, and st
 
 - Python 3.10-3.13 (NOT 3.14)
 - Node.js 18+ and npm
-- Webcam and microphone
+- Microphone access
 - 2-3 GB disk space for AI models
 
 ### Installation & Run
@@ -47,17 +47,17 @@ start-frontend.bat
 ```
 
 **3. Open Browser:**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
+- **Frontend:** http://localhost:3000
+- **Backend API:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
 
 ## 📖 Usage
 
-1. Enter text describing your emotions
-2. Capture or upload a photo showing your facial expression
-3. Record a short audio clip (5-10 seconds)
-4. Click "Analyze Emotions"
-5. View detailed results with confidence scores
+1. **Text:** Type how you're feeling in the text box
+2. **Image:** Click "Upload" and select a photo (or use "Camera" if available)
+3. **Audio:** Click "Start Recording", speak for 5-10 seconds, then click "Stop"
+4. **Analyze:** Click "Analyze Emotions" button
+5. **Results:** View emotion breakdown, confidence chart, and ML predictions
 
 ## 🏗️ Architecture
 
@@ -78,18 +78,17 @@ start-frontend.bat
 ## 🛠️ Tech Stack
 
 ### Frontend
-- **Framework:** Next.js 14 (App Router)
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS
-- **Icons:** Lucide React
-- **Features:** Webcam/mic capture, file uploads
+- Next.js 16 (App Router, Turbopack)
+- TypeScript
+- Tailwind CSS v4
+- Lucide React Icons
 
 ### Backend
-- **Framework:** FastAPI
-- **AI Models:** Hugging Face Transformers
-- **Deep Learning:** PyTorch
-- **ML Algorithms:** Scikit-learn (Decision Tree, KNN)
-- **Data:** Pandas, Matplotlib
+- FastAPI
+- Hugging Face Transformers
+- PyTorch
+- Scikit-learn (Decision Tree, KNN)
+- Pandas & Matplotlib
 
 ### AI Models
 - **Text:** `j-hartmann/emotion-english-distilroberta-base`
@@ -105,78 +104,66 @@ start-frontend.bat
 │   └── requirements.txt     # Python dependencies
 ├── frontend/
 │   ├── app/
-│   │   └── page.tsx        # Main UI component
-│   ├── package.json
-│   └── tailwind.config.ts
+│   │   ├── page.tsx        # Main UI component
+│   │   ├── layout.tsx      # Root layout
+│   │   └── globals.css     # Global styles
+│   └── package.json
 ├── start-backend.sh         # Backend startup (Mac/Linux)
 ├── start-frontend.sh        # Frontend startup (Mac/Linux)
 ├── start-backend.bat        # Backend startup (Windows)
 ├── start-frontend.bat       # Frontend startup (Windows)
-└── README.md               # This file
-```
-
-## 🔧 Development
-
-### Backend Development
-```bash
-source venv/bin/activate
-cd backend
-uvicorn main:app --reload --port 8000
-```
-
-### Frontend Development
-```bash
-cd frontend
-npm run dev
+└── README.md
 ```
 
 ## 🐛 Troubleshooting
 
-**Backend Issues:**
-- Ensure Python 3.10-3.13 is installed
-- Check if port 8000 is available
-- First run downloads ~1-2GB of AI models
+**Backend won't start:**
+- Check Python version: `python3 --version` (must be 3.10-3.13)
+- Recreate venv: `rm -rf venv && python3.13 -m venv venv`
+- First run downloads ~1-2GB of AI models (takes 1-2 minutes)
 
-**Frontend Issues:**
-- Ensure Node.js 18+ is installed
-- Delete `node_modules` and run `npm install`
-- Check if port 3000 is available
+**Frontend won't start:**
+- Check Node.js: `node --version` (must be 18+)
+- Reinstall: `cd frontend && rm -rf node_modules && npm install`
 
-**Camera/Mic Issues:**
-- Grant browser permissions
-- Use Chrome/Edge (best compatibility)
-- Ensure HTTPS or localhost
+**Analysis fails:**
+- Ensure backend shows "✅ Models loaded successfully"
+- Check backend is running on port 8000
+- Check browser console (F12) for errors
+
+**Audio not working:**
+- Grant microphone permissions in browser
+- Speak clearly for 5-10 seconds
+- Use Chrome or Edge for best compatibility
 
 ## 📊 API Endpoints
 
 - `GET /` - Health check
+- `GET /health` - Models status
 - `POST /analyze` - Analyze emotions (multipart/form-data)
+  - `text`: string
+  - `image`: file
+  - `audio`: file
 - `GET /history?limit=10` - Get analysis history
-- `GET /docs` - Interactive API documentation
 
 ## 🚀 Deployment
 
-### Backend (Railway/Render)
+### Backend (Railway/Render/AWS)
 ```bash
 pip install -r backend/requirements.txt
 uvicorn backend.main:app --host 0.0.0.0 --port $PORT
 ```
 
-### Frontend (Vercel)
+### Frontend (Vercel - Recommended)
 ```bash
 cd frontend
 npm run build
 ```
-
-Update API URL in environment variables.
+Set environment variable: `NEXT_PUBLIC_API_URL=https://your-backend-url.com`
 
 ## 📝 License
 
-MIT License - Free for personal and commercial use
-
-## 🤝 Contributing
-
-Contributions welcome! Please open an issue or submit a PR.
+MIT License
 
 ## 🙏 Acknowledgments
 
@@ -186,4 +173,4 @@ Contributions welcome! Please open an issue or submit a PR.
 
 ---
 
-Made with ❤️ using Next.js, FastAPI, and AI
+**Made with ❤️ using Next.js, FastAPI, and AI**

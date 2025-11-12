@@ -274,13 +274,13 @@ export default function Home() {
                 
                 {isCameraOn && (
                   <div className="space-y-2">
-                    <div className="relative bg-black rounded-lg overflow-hidden h-48">
+                    <div className="relative bg-black rounded-lg overflow-hidden">
                       <video
                         ref={videoRef}
                         autoPlay
                         playsInline
                         muted
-                        className="w-full h-full object-cover"
+                        className="w-full h-auto max-h-64 object-contain mx-auto"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -306,11 +306,11 @@ export default function Home() {
                 
                 {imagePreview && !isCameraOn && (
                   <div className="relative">
-                    <div className="relative w-full h-48 overflow-hidden rounded-lg border-4 border-green-500">
+                    <div className="relative w-full rounded-lg border-4 border-green-500 bg-gray-100 overflow-hidden">
                       <img 
                         src={imagePreview} 
                         alt="Preview" 
-                        className="w-full h-full object-cover" 
+                        className="w-full h-auto max-h-64 object-contain mx-auto" 
                       />
                     </div>
                     <div className="absolute top-2 right-2 bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">

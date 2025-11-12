@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Upload, Mic, Camera, Sparkles, Brain, TrendingUp } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Upload, Mic, Camera, Sparkles, Brain, TrendingUp, X, Check, AlertCircle } from 'lucide-react';
 
 export default function Home() {
   const [text, setText] = useState('');
@@ -10,75 +10,114 @@ export default function Home() {
   const [imagePreview, setImagePreview] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string>('');
   
   const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording]);
 
   const startCamera = async () => {
+    setError('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'user' },
+        audio: false
+      });
+      
+      streamRef.current = stream;
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setIsCameraOn(true);
       }
-    } catch (err) {
-      alert('Camera access denied');
+    } catch (err: any) {
+      console.error('Camera error:', err);
+      setError('Camera access denied. Please allow camera permissions.');
     }
   };
 
   const capturePhoto = () => {
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(videoRef.current, 0, 0);
+    if (!videoRef.current) return;
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(videoRef.current, 0, 0);
       
       canvas.toBlob((blob) => {
         if (blob) {
           const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
           setImage(file);
-          setImagePreview(URL.createObjectURL(blob));
+          setImagePreview(canvas.toDataURL('image/jpeg'));
           stopCamera();
         }
-      });
+      }, 'image/jpeg', 0.95);
     }
   };
 
   const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      setIsCameraOn(false);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOn(false);
   };
 
   const startRecording = async () => {
+    setError('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
-      const chunks: BlobPart[] = [];
+      audioChunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/wav' });
-        const file = new File([blob], 'recording.wav', { type: 'audio/wav' });
-        setAudio(file);
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
+        setAudio(audioFile);
         stream.getTracks().forEach(track => track.stop());
+        setRecordingTime(0);
       };
 
       mediaRecorder.start();
       setIsRecording(true);
-    } catch (err) {
-      alert('Microphone access denied');
+    } catch (err: any) {
+      console.error('Microphone error:', err);
+      setError('Microphone access denied. Please allow microphone permissions.');
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current) {
+    if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
@@ -88,15 +127,30 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (file) {
       setImage(file);
-      setImagePreview(URL.createObjectURL(file));
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     
-    if (!text || !image || !audio) {
-      alert('Please provide all three inputs');
+    if (!text.trim()) {
+      setError('Please enter your feelings in the text box');
+      return;
+    }
+    
+    if (!image) {
+      setError('Please capture or upload a photo');
+      return;
+    }
+    
+    if (!audio) {
+      setError('Please record audio');
       return;
     }
 
@@ -112,137 +166,203 @@ export default function Home() {
         body: formData,
       });
       
+      if (!response.ok) {
+        throw new Error('Analysis failed');
+      }
+      
       const data = await response.json();
       setResult(data);
-    } catch (error) {
-      alert('Error analyzing emotions. Make sure the backend is running.');
+      setError('');
+    } catch (error: any) {
+      console.error('Error:', error);
+      setError('Error analyzing emotions. Make sure the backend is running on port 8000.');
     } finally {
       setLoading(false);
     }
   };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const resetAll = () => {
+    setText('');
+    setImage(null);
+    setAudio(null);
+    setImagePreview('');
+    setResult(null);
+    setError('');
+    stopCamera();
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-pink-500">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-pink-500 p-4">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold text-white mb-4 flex items-center justify-center gap-3">
-            <Sparkles className="w-12 h-12" />
+        <div className="text-center mb-6 pt-4">
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-2 flex items-center justify-center gap-3">
+            <Sparkles className="w-10 h-10 md:w-12 md:h-12" />
             AI Emotion Recognition
           </h1>
-          <p className="text-white/90 text-lg">
-            Advanced multimodal emotion analysis using Deep Learning
+          <p className="text-white/90 text-base md:text-lg">
+            Multimodal emotion analysis using Deep Learning
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-4 bg-red-100 border-2 border-red-500 text-red-800 px-4 py-3 rounded-xl flex items-center gap-2">
+            <AlertCircle className="w-5 h-5" />
+            <span className="font-semibold">{error}</span>
+          </div>
+        )}
+
+        <div className="grid lg:grid-cols-2 gap-4 max-w-full">
           {/* Input Panel */}
-          <div className="bg-white rounded-2xl shadow-2xl p-6">
-            <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2">
-              <Upload className="w-6 h-6" />
+          <div className="bg-white rounded-2xl shadow-xl p-4 md:p-5 overflow-hidden">
+            <h2 className="text-lg md:text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
+              <Upload className="w-5 h-5 md:w-6 md:h-6" />
               Input Data
             </h2>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
               {/* Text Input */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-800 mb-2">
                   💭 How are you feeling?
                 </label>
                 <textarea
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder="Express your emotions in words..."
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+                  placeholder="I feel happy because..."
+                  className="w-full px-3 py-2 text-gray-900 bg-white border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all outline-none resize-none"
                   rows={3}
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
                 />
               </div>
 
               {/* Image Input */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-800 mb-2">
                   📸 Facial Expression
                 </label>
-                <div className="space-y-3">
-                  {!isCameraOn ? (
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={startCamera}
-                        className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Camera className="w-4 h-4" />
-                        Open Camera
-                      </button>
-                      <label className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center gap-2 cursor-pointer">
-                        <Upload className="w-4 h-4" />
-                        Upload Photo
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
+                
+                {!isCameraOn && !imagePreview && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-semibold text-sm flex items-center justify-center gap-2"
+                    >
+                      <Camera className="w-4 h-4" />
+                      Camera
+                    </button>
+                    <label className="px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer">
+                      <Upload className="w-4 h-4" />
+                      Upload
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+                
+                {isCameraOn && (
+                  <div className="space-y-2">
+                    <div className="relative bg-black rounded-lg overflow-hidden h-48">
                       <video
                         ref={videoRef}
                         autoPlay
-                        className="w-full rounded-lg"
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover"
                       />
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={capturePhoto}
-                          className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                        >
-                          Capture
-                        </button>
-                        <button
-                          type="button"
-                          onClick={stopCamera}
-                          className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
                     </div>
-                  )}
-                  {imagePreview && (
-                    <img src={imagePreview} alt="Preview" className="w-full rounded-lg" />
-                  )}
-                </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={capturePhoto}
+                        className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-bold text-sm flex items-center justify-center gap-2"
+                      >
+                        <Check className="w-4 h-4" />
+                        Capture
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopCamera}
+                        className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-bold text-sm flex items-center justify-center gap-2"
+                      >
+                        <X className="w-4 h-4" />
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {imagePreview && !isCameraOn && (
+                  <div className="relative">
+                    <div className="relative w-full h-48 overflow-hidden rounded-lg border-4 border-green-500">
+                      <img 
+                        src={imagePreview} 
+                        alt="Preview" 
+                        className="w-full h-full object-cover" 
+                      />
+                    </div>
+                    <div className="absolute top-2 right-2 bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+                      <Check className="w-3 h-3" />
+                      Ready
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImage(null);
+                        setImagePreview('');
+                      }}
+                      className="absolute top-2 left-2 bg-red-600 text-white p-1.5 rounded-full hover:bg-red-700 transition-all shadow-lg"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Audio Input */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-800 mb-2">
                   🎙️ Voice Recording
                 </label>
                 <button
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
-                  className={`w-full px-4 py-3 rounded-lg text-white font-semibold transition-all flex items-center justify-center gap-2 ${
+                  className={`w-full px-4 py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center gap-2 text-sm ${
                     isRecording
-                      ? 'bg-red-500 hover:bg-red-600 animate-pulse'
-                      : 'bg-purple-500 hover:bg-purple-600'
+                      ? 'bg-red-600 hover:bg-red-700 animate-pulse'
+                      : audio
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-purple-600 hover:bg-purple-700'
                   }`}
                 >
                   <Mic className="w-5 h-5" />
-                  {isRecording ? 'Stop Recording' : audio ? 'Re-record' : 'Start Recording'}
+                  {isRecording ? (
+                    <>Stop ({formatTime(recordingTime)})</>
+                  ) : audio ? (
+                    <>✓ Recorded</>
+                  ) : (
+                    <>Start Recording</>
+                  )}
                 </button>
-                {audio && !isRecording && (
-                  <p className="text-sm text-green-600 mt-2">✓ Audio recorded</p>
-                )}
               </div>
 
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading || !text || !image || !audio}
-                className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+                disabled={loading}
+                className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 text-white font-bold rounded-lg hover:from-purple-700 hover:via-pink-700 hover:to-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg"
               >
                 {loading ? (
                   <>
@@ -256,75 +376,85 @@ export default function Home() {
                   </>
                 )}
               </button>
+
+              {result && (
+                <button
+                  type="button"
+                  onClick={resetAll}
+                  className="w-full px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 transition-all text-sm"
+                >
+                  Reset & Analyze Again
+                </button>
+              )}
             </form>
           </div>
 
           {/* Results Panel */}
-          <div className="bg-white rounded-2xl shadow-2xl p-6">
-            <h2 className="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2">
-              <TrendingUp className="w-6 h-6" />
-              Analysis Results
+          <div className="bg-white rounded-2xl shadow-xl p-4 md:p-5 overflow-hidden">
+            <h2 className="text-lg md:text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />
+              Results
             </h2>
 
             {!result ? (
               <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                <Brain className="w-16 h-16 mb-4" />
-                <p className="text-lg">Awaiting analysis...</p>
-                <p className="text-sm">Provide all inputs and click analyze</p>
+                <Brain className="w-16 h-16 mb-3 opacity-50" />
+                <p className="text-lg font-semibold">Awaiting analysis...</p>
+                <p className="text-sm mt-1">Fill all inputs above</p>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {/* Emotion Cards */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border-l-4 border-blue-500">
-                    <p className="text-xs text-blue-600 font-semibold mb-1">TEXT</p>
-                    <p className="text-xl font-bold text-gray-800">{result.text.label}</p>
-                    <p className="text-sm text-gray-600">{(result.text.score * 100).toFixed(1)}%</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-gradient-to-br from-blue-100 to-blue-200 p-3 rounded-lg border-l-4 border-blue-600">
+                    <p className="text-xs text-blue-700 font-bold">TEXT</p>
+                    <p className="text-lg font-bold text-gray-900">{result.text.label}</p>
+                    <p className="text-xs text-gray-700 font-semibold">{(result.text.score * 100).toFixed(1)}%</p>
                   </div>
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border-l-4 border-purple-500">
-                    <p className="text-xs text-purple-600 font-semibold mb-1">IMAGE</p>
-                    <p className="text-xl font-bold text-gray-800">{result.image.label}</p>
-                    <p className="text-sm text-gray-600">{(result.image.score * 100).toFixed(1)}%</p>
+                  <div className="bg-gradient-to-br from-purple-100 to-purple-200 p-3 rounded-lg border-l-4 border-purple-600">
+                    <p className="text-xs text-purple-700 font-bold">IMAGE</p>
+                    <p className="text-lg font-bold text-gray-900">{result.image.label}</p>
+                    <p className="text-xs text-gray-700 font-semibold">{(result.image.score * 100).toFixed(1)}%</p>
                   </div>
-                  <div className="bg-gradient-to-br from-pink-50 to-pink-100 p-4 rounded-lg border-l-4 border-pink-500">
-                    <p className="text-xs text-pink-600 font-semibold mb-1">AUDIO</p>
-                    <p className="text-xl font-bold text-gray-800">{result.audio.label}</p>
-                    <p className="text-sm text-gray-600">{(result.audio.score * 100).toFixed(1)}%</p>
+                  <div className="bg-gradient-to-br from-pink-100 to-pink-200 p-3 rounded-lg border-l-4 border-pink-600">
+                    <p className="text-xs text-pink-700 font-bold">AUDIO</p>
+                    <p className="text-lg font-bold text-gray-900">{result.audio.label}</p>
+                    <p className="text-xs text-gray-700 font-semibold">{(result.audio.score * 100).toFixed(1)}%</p>
                   </div>
                 </div>
 
                 {/* Chart */}
                 {result.chart && (
-                  <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="bg-gray-50 p-3 rounded-lg overflow-hidden">
                     <img
                       src={`data:image/png;base64,${result.chart}`}
-                      alt="Confidence Chart"
-                      className="w-full"
+                      alt="Chart"
+                      className="w-full h-auto rounded"
                     />
                   </div>
                 )}
 
                 {/* ML Predictions */}
-                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-4 rounded-lg border-2 border-yellow-300">
-                  <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <div className="bg-gradient-to-r from-yellow-100 to-orange-100 p-4 rounded-lg border-2 border-yellow-400">
+                  <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
                     <Brain className="w-5 h-5" />
-                    Machine Learning Predictions
+                    ML Predictions
                   </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-600">Decision Tree</p>
-                      <p className="text-2xl font-bold text-gray-800">{result.ml_predictions.decision_tree}</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-white p-2 rounded">
+                      <p className="text-xs text-gray-600 font-semibold">Decision Tree</p>
+                      <p className="text-xl font-bold text-gray-900">{result.ml_predictions.decision_tree}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600">K-Nearest Neighbors</p>
-                      <p className="text-2xl font-bold text-gray-800">{result.ml_predictions.knn}</p>
+                    <div className="bg-white p-2 rounded">
+                      <p className="text-xs text-gray-600 font-semibold">KNN</p>
+                      <p className="text-xl font-bold text-gray-900">{result.ml_predictions.knn}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Stats */}
-                <div className="text-center text-sm text-gray-600">
-                  ✅ Analysis saved • Total records: {result.total_records}
+                <div className="text-center bg-green-100 text-green-800 py-2 px-3 rounded-lg font-semibold text-sm">
+                  ✅ Saved • Total: {result.total_records}
                 </div>
               </div>
             )}

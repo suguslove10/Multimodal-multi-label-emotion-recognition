@@ -29,6 +29,13 @@ wheels/
 # Data files
 emotion_results.csv
 *.csv
+temp_audio_*.wav
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/.env*.local
 
 # IDE
 .vscode/
@@ -48,6 +55,9 @@ emotion_results.csv
 
 # Hugging Face cache
 .huggingface/
+
+# Gradio
+.gradio/
 
 # Logs
 *.log
